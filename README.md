@@ -1,12 +1,11 @@
 # DEPI-Graduation-project-Diabetes-Diagnosis
-Predictive Analytics for Diabetes Diagnosis and classification Using Machine Learning
 
 ## Overview
 
 This project aims to develop a machine learning model for diagnosing diabetes using a comprehensive dataset of health and demographic information. The notebook contains data preprocessing, exploratory data analysis (EDA), and initial steps towards building a predictive model.
 
 ## Dataset
-
+Link: https://www.kaggle.com/datasets/priyamchoksi/100000-diabetes-clinical-dataset/code
 The dataset comprises health and demographic data of 100,000 individuals, including:
 
 - Demographic information (age, gender, race)
