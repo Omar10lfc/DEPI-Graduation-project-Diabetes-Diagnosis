@@ -6,6 +6,7 @@ This project aims to develop a machine learning model for diagnosing diabetes us
 
 ## Dataset
 Link: https://www.kaggle.com/datasets/priyamchoksi/100000-diabetes-clinical-dataset/code
+
 The dataset comprises health and demographic data of 100,000 individuals, including:
 
 - Demographic information (age, gender, race)
