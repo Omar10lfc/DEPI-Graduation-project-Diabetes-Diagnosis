@@ -47,4 +47,4 @@ The dataset comprises health and demographic data of 100,000 individuals, includ
 
 ## License
 
-This project is licensed under the MIT License
+This Dataset is licensed under the MIT License
