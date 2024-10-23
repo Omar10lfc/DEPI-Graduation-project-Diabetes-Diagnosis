@@ -7,8 +7,6 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
-# Disable warnings
-st.set_option('deprecation.showPyplotGlobalUse', False)
 
 @st.cache_data
 def load_data():
