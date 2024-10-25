@@ -37,6 +37,7 @@ The dataset comprises health and demographic data of 100,000 individuals, includ
 - Implemented machine learning models for diabetes prediction.
 - Evaluated and compared different model performances.
 - Developed a user-friendly interface for diabetes classification and prediction.
+- Deployed App Link : https://diabetes-diagnosis-app.streamlit.app/
 
 ## Getting Started
 
