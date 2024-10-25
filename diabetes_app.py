@@ -7,9 +7,6 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 
-
-
-
 @st.cache_data
 def load_data():
     data = pd.read_csv('diabetes_dataset.csv')
