@@ -198,8 +198,8 @@ def visualization_page():
 
     st.write("Trend of Diabetic and Non-diabetic People Over Time:")
     fig, ax = plt.subplots(figsize=(8, 6))
-    plt.plot(yearly_diabetes.index, yearly_diabetes[0], marker='o', linestyle='-', color='skyblue', label='Non-diabetic', ax=ax)
-    plt.plot(yearly_diabetes.index, yearly_diabetes[1], marker='o', linestyle='-', color='salmon', label='Diabetic', ax=ax)
+    ax.plot(yearly_diabetes.index, yearly_diabetes[0], marker='o', linestyle='-', color='skyblue', label='Non-diabetic')
+    ax.plot(yearly_diabetes.index, yearly_diabetes[1], marker='o', linestyle='-', color='salmon', label='Diabetic')
     ax.set_title('Trend of Diabetic and Non-diabetic People Over Time', fontsize=16)
     ax.set_xlabel('Year', fontsize=12)
     ax.set_ylabel('Count', fontsize=12)
@@ -207,6 +207,7 @@ def visualization_page():
     ax.legend(title='Diabetes Status')
     plt.tight_layout()
     st.pyplot(fig)
+
 
     st.write("Age Against Diabetes:")
     fig, ax = plt.subplots(figsize=(10, 6))
