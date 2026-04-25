@@ -1,62 +1,94 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
+import json
+import os
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import seaborn as sns
+import streamlit as st
+from joblib import load
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.preprocessing import LabelEncoder
+
+
+ARTIFACT_MODEL_PATH = os.path.join("artifacts", "best_model.joblib")
+ARTIFACT_METADATA_PATH = os.path.join("artifacts", "model_metadata.json")
+
 
 @st.cache_data
 def load_data():
-    data = pd.read_csv('diabetes_dataset.csv')
-    data.drop(labels=[1611, 2550, 2787, 4385, 5064, 7975, 19647, 19658, 22784, 32002, 52722, 58482, 59534, 64571, 69173, 69763, 70701, 70863], axis=0, inplace=True)
+    data = pd.read_csv("diabetes_dataset.csv")
+    data.drop(
+        labels=[
+            1611,
+            2550,
+            2787,
+            4385,
+            5064,
+            7975,
+            19647,
+            19658,
+            22784,
+            32002,
+            52722,
+            58482,
+            59534,
+            64571,
+            69173,
+            69763,
+            70701,
+            70863,
+        ],
+        axis=0,
+        inplace=True,
+    )
     data.drop_duplicates(inplace=True)
 
-    
     df_race = data[["race:AfricanAmerican", "race:Asian", "race:Caucasian", "race:Hispanic", "race:Other"]]
-    by_race = pd.get_dummies(df_race) 
+    by_race = pd.from_dummies(df_race)
     data = data.drop(columns=["race:AfricanAmerican", "race:Asian", "race:Caucasian", "race:Hispanic", "race:Other"])
-    data = pd.concat([data, by_race], axis=1) 
+    data.insert(2, "race", by_race)
+    data["race"] = data["race"].str.replace("race:", "", regex=False)
+    data["race"] = data["race"].str.replace("AfricanAmerican", "African-American", regex=False)
 
-    # Process age categories
     bins = [0, 18, 25, 35, 45, 55, 65, np.inf]
     age_order = ["0-18", "18-24", "25-34", "35-44", "45-54", "55-64", "65+"]
     data.insert(3, "age_cat", pd.cut(data["age"], bins, labels=age_order))
-    
-    
+
     bins = [0, 18.5, 25, 30, 35, 40, np.inf]
     bmi_order = ["Underweight", "Normal", "Overweight", "Moderately Obese", "Severely Obese", "Morbidly Obese"]
     data.insert(9, "bmi_cat", pd.cut(data["bmi"], bins, labels=bmi_order))
-    
+
     data["smoking_history"] = data["smoking_history"].str.title()
     data = data[data["smoking_history"] != "No Info"]
 
-    
-    columns = ['gender', 'age_cat', 'location', 'smoking_history', 'bmi_cat']
-    for col in columns:
+    for col in ["gender", "race", "age_cat", "location", "smoking_history", "bmi_cat"]:
         if col in data.columns:
             data[col] = data[col].astype("category")
 
-    # Rename columns for consistency
-    data.columns = [col.title() for col in data.columns]
-    data = data.rename(columns={"Age_Cat": "Age Group",
-                                "Heart_Disease": "Heart Disease",
-                                "Smoking_History": "Smoking History",
-                                "Bmi_Cat": "BMI Category",
-                                "Bmi": "BMI",
-                                "Hba1C_Level": "HbA1C Level",
-                                "Blood_Glucose_Level": "Blood Glucose Level"
-                                })
-    
-    # Balance the dataset
+    columns = list(data.columns)
+    new_names = [col.title() for col in columns]
+    data = data.rename(columns=dict(zip(columns, new_names)))
+    data = data.rename(
+        columns={
+            "Age_Cat": "Age Group",
+            "Heart_Disease": "Heart Disease",
+            "Smoking_History": "Smoking History",
+            "Bmi_Cat": "BMI Category",
+            "Bmi": "BMI",
+            "Hba1C_Level": "HbA1C Level",
+            "Blood_Glucose_Level": "Blood Glucose Level",
+            "Race": "Race",
+        }
+    )
+
+    # Keep balancing behavior aligned with notebook app experiments.
     diabetes_yes = data[data["Diabetes"] == 1]
     diabetes_no = data[data["Diabetes"] == 0].sample(n=diabetes_yes.shape[0], ignore_index=True, random_state=42)
     data = pd.concat([diabetes_yes, diabetes_no], axis=0).reset_index(drop=True)
 
-    # Removing the outliers
-    columns = ['BMI', 'HbA1C Level']
-    for col in columns:
+    for col in ["BMI", "HbA1C Level"]:
         percentile25 = data[col].quantile(0.25)
         percentile75 = data[col].quantile(0.75)
         iqr = percentile75 - percentile25
@@ -66,66 +98,100 @@ def load_data():
 
     return data
 
-data = load_data()
+
+def prepare_model_dataframe(raw_df):
+    model_df = raw_df.copy()
+    drop_cols = ["Year", "Location", "BMI Category", "Age Group", "Race"]
+    model_df = model_df.drop(columns=[c for c in drop_cols if c in model_df.columns])
+
+    encoders = {}
+    for col in ["Gender", "Smoking History"]:
+        if col in model_df.columns:
+            le = LabelEncoder()
+            model_df[col] = le.fit_transform(model_df[col])
+            encoders[col] = le
+
+    return model_df, encoders
+
 
 @st.cache_resource
-def train_model(data):
-    data.drop(columns=['Year', 'Location', 'BMI Category', 'Age Group'], axis=1, inplace=True)
-    l = LabelEncoder()
-    data['Gender'] = l.fit_transform(data['Gender'])
-    data['Smoking History'] = l.fit_transform(data['Smoking History'])
-    x = data[['Age', 'Gender', 'Blood Glucose Level', 'Smoking History', 'Hypertension', 'Heart Disease', 'HbA1C Level']]
-    y = data['Diabetes']
+def load_prediction_artifacts(_model_df):
+    feature_columns = [col for col in _model_df.columns if col != "Diabetes"]
+    metadata = {}
 
-    X_train, X_test, y_train, y_test = train_test_split(x, y, test_size=0.2, stratify=y, random_state=42, shuffle=True)
+    if os.path.exists(ARTIFACT_MODEL_PATH):
+        model = load(ARTIFACT_MODEL_PATH)
+        if os.path.exists(ARTIFACT_METADATA_PATH):
+            with open(ARTIFACT_METADATA_PATH, "r", encoding="utf-8") as f:
+                metadata = json.load(f)
+                feature_columns = metadata.get("feature_columns", feature_columns)
+        return model, feature_columns, metadata, True
 
-    scaler_X = StandardScaler()
-    X_train_scaled = scaler_X.fit_transform(X_train)
-    X_test_scaled = scaler_X.transform(X_test)
-
+    # Fallback if notebook artifact has not been generated yet.
+    x = _model_df[feature_columns]
+    y = _model_df["Diabetes"]
+    X_train, _, y_train, _ = train_test_split(x, y, test_size=0.2, stratify=y, random_state=42, shuffle=True)
     model = GradientBoostingClassifier(n_estimators=100)
-    model.fit(X_train_scaled, y_train)
+    model.fit(X_train, y_train)
+    return model, feature_columns, metadata, False
 
-    return model, scaler_X
 
-model, scaler_X = train_model(data)
+data = load_data()
+model_df, label_encoders = prepare_model_dataframe(data)
+model, feature_columns, model_metadata, using_artifact = load_prediction_artifacts(model_df)
+
+
+def build_input_dataframe(feature_cols, reference_df, encoders):
+    input_payload = {}
+    for col in feature_cols:
+        if col == "Gender" and "Gender" in encoders:
+            label = st.selectbox("Gender", list(encoders["Gender"].classes_))
+            input_payload[col] = int(encoders["Gender"].transform([label])[0])
+        elif col == "Smoking History" and "Smoking History" in encoders:
+            label = st.selectbox("Smoking History", list(encoders["Smoking History"].classes_))
+            input_payload[col] = int(encoders["Smoking History"].transform([label])[0])
+        elif col in ["Hypertension", "Heart Disease"]:
+            label = st.selectbox(col, ["No", "Yes"])
+            input_payload[col] = 1 if label == "Yes" else 0
+        else:
+            if col in reference_df.columns and pd.api.types.is_numeric_dtype(reference_df[col]):
+                col_min = float(reference_df[col].min())
+                col_max = float(reference_df[col].max())
+                default = float(reference_df[col].median())
+                step = 1.0 if col in ["Age", "Blood Glucose Level"] else 0.1
+                input_payload[col] = st.number_input(col, min_value=col_min, max_value=col_max, value=default, step=step)
+            else:
+                input_payload[col] = st.number_input(col, value=0.0)
+
+    return pd.DataFrame([input_payload], columns=feature_cols)
+
 
 def diagnosis_page():
     st.title("Diabetes Diagnosis")
 
-    age = st.number_input("Age", 1, 80)
-    gender = st.selectbox("Gender", ["Male", "Female"])
-    blood_glucose = st.number_input("Blood Glucose Level", 0.0, 300.0)
-    smoking_history = st.selectbox("Smoking History", ["Never Smoked", "Former Smoker", "Current Smoker"])
-    hypertension = st.selectbox("Hypertension", ["No", "Yes"])
-    heart_disease = st.selectbox("Heart Disease", ["No", "Yes"])
-    hba1c_level = st.number_input("HbA1c Level", 0.0, 20.0)
+    if using_artifact:
+        selected = model_metadata.get("best_model", "saved model")
+        st.caption(f"Using saved notebook model artifact: {selected}")
+    else:
+        st.warning("Saved artifact not found. Using fallback model trained in app.")
 
-    gender = 1 if gender == "Male" else 0
-    hypertension = 1 if hypertension == "Yes" else 0
-    heart_disease = 1 if heart_disease == "Yes" else 0
-    smoking_map = {"Never Smoked": 0, "Former Smoker": 1, "Current Smoker": 2}
-    smoking_history = smoking_map[smoking_history]
-
-    input_data = pd.DataFrame({
-        'Age': [age],
-        'Gender': [gender],
-        'Blood Glucose Level': [blood_glucose],
-        'Smoking History': [smoking_history],
-        'Hypertension': [hypertension],
-        'Heart Disease': [heart_disease],
-        'HbA1C Level': [hba1c_level]
-    })
+    input_data = build_input_dataframe(feature_columns, model_df, label_encoders)
 
     if st.button("Diagnose"):
         try:
-            input_scaled = scaler_X.transform(input_data)
-            result = model.predict(input_scaled)
-            if result[0] == 1:
+            result = model.predict(input_data)[0]
+            proba = None
+            if hasattr(model, "predict_proba"):
+                proba = float(model.predict_proba(input_data)[0, 1])
+
+            if result == 1:
                 st.error("The patient is likely to be diabetic.")
             else:
                 st.success("The patient is not diabetic.")
-        except ValueError as e:
+
+            if proba is not None:
+                st.info(f"Predicted probability (Diabetes=1): {proba:.3f}")
+        except Exception as e:
             st.error(f"Error in processing the input: {e}")
 
 def visualization_page():
@@ -220,7 +286,7 @@ def visualization_page():
 
 
 def main():
-    page = st.selectbox(" App Navigation", ["Diagnosis", "Dataset History"])
+    page = st.selectbox("App Navigation", ["Diagnosis", "Dataset History"])
     if page == "Diagnosis":
         diagnosis_page()
     elif page == "Dataset History":

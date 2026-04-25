@@ -1,0 +1,28 @@
+{
+  "run_time_utc": "2026-04-25T20:08:48.130167Z",
+  "dataset_rows": 114244,
+  "dataset_columns": [
+    "Gender",
+    "Age",
+    "Hypertension",
+    "Heart Disease",
+    "Smoking History",
+    "BMI",
+    "HbA1C Level",
+    "Blood Glucose Level",
+    "Diabetes"
+  ],
+  "train_rows": 91395,
+  "test_rows": 22849,
+  "class_distribution_train": {
+    "1": 45698,
+    "0": 45697
+  },
+  "class_distribution_test": {
+    "0": 11425,
+    "1": 11424
+  },
+  "best_model": "XGBoost",
+  "best_auc_pr": 0.995241476329264,
+  "best_f1": 0.9610875863605973
+}
