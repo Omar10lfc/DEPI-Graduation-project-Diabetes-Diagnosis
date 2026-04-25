@@ -4,6 +4,7 @@ pandas
 seaborn
 scikit-learn
 imbalanced-learn
+xgboost
 
 
 

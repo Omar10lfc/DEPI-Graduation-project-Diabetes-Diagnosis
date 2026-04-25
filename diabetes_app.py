@@ -118,14 +118,18 @@ def prepare_model_dataframe(raw_df):
 def load_prediction_artifacts(_model_df):
     feature_columns = [col for col in _model_df.columns if col != "Diabetes"]
     metadata = {}
+    artifact_error = ""
 
     if os.path.exists(ARTIFACT_MODEL_PATH):
-        model = load(ARTIFACT_MODEL_PATH)
-        if os.path.exists(ARTIFACT_METADATA_PATH):
-            with open(ARTIFACT_METADATA_PATH, "r", encoding="utf-8") as f:
-                metadata = json.load(f)
-                feature_columns = metadata.get("feature_columns", feature_columns)
-        return model, feature_columns, metadata, True
+        try:
+            model = load(ARTIFACT_MODEL_PATH)
+            if os.path.exists(ARTIFACT_METADATA_PATH):
+                with open(ARTIFACT_METADATA_PATH, "r", encoding="utf-8") as f:
+                    metadata = json.load(f)
+                    feature_columns = metadata.get("feature_columns", feature_columns)
+            return model, feature_columns, metadata, True, artifact_error
+        except Exception as e:
+            artifact_error = str(e)
 
     # Fallback if notebook artifact has not been generated yet.
     x = _model_df[feature_columns]
@@ -133,12 +137,12 @@ def load_prediction_artifacts(_model_df):
     X_train, _, y_train, _ = train_test_split(x, y, test_size=0.2, stratify=y, random_state=42, shuffle=True)
     model = GradientBoostingClassifier(n_estimators=100)
     model.fit(X_train, y_train)
-    return model, feature_columns, metadata, False
+    return model, feature_columns, metadata, False, artifact_error
 
 
 data = load_data()
 model_df, label_encoders = prepare_model_dataframe(data)
-model, feature_columns, model_metadata, using_artifact = load_prediction_artifacts(model_df)
+model, feature_columns, model_metadata, using_artifact, artifact_error = load_prediction_artifacts(model_df)
 
 
 def build_input_dataframe(feature_cols, reference_df, encoders):
@@ -174,6 +178,8 @@ def diagnosis_page():
         st.caption(f"Using saved notebook model artifact: {selected}")
     else:
         st.warning("Saved artifact not found. Using fallback model trained in app.")
+        if artifact_error:
+            st.caption(f"Artifact load fallback reason: {artifact_error}")
 
     input_data = build_input_dataframe(feature_columns, model_df, label_encoders)
 
